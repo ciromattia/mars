@@ -1,0 +1,329 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+<HEAD>
+<TITLE>The MARS simulator - Storia di un sistema operativo</TITLE>
+</HEAD>
+
+<BODY bgcolor="#00aacc">
+
+<center><br>
+<h1>The MARS simulator - Storia di un sistema operativo</h1><br>
+<hr>
+<h3>
+AUTORI:<br>
+Ciro Mattia Gonano - &lt;<a href="mailto:gonano@CS.UniBO.It">gonano@CS.UniBO.It</a>&gt;<br>
+Jacopo Saporetti - &lt;<a href="mailto:saporet3@CS.UniBO.It">saporet3@CS.UniBO.It</a>&gt;<br>
+Mauro Seno - &lt;<a href="mailto:mseno@CS.UniBO.It">mseno@CS.UniBO.It</a>&gt;<br>
+</h3>
+<hr>
+</center>
+<h3>Disclaimer</h3>
+Il presente documento ha funzione di relazione in merito al software con il quale
+dovrebbe essere distribuito; una sua lettura snaturata dal contesto al quale si
+riferisce pu&ograve; stravolgere completamente i concetti ivi contenuti, portando a conclusioni
+assolutamente errate.<br>
+Si prega perci&ograve; il lettore di leggere con le dovute cautele, contestualizzando sempre
+il discorso.<br>
+<br>
+Il presente documento costituisce la relazione in merito al progetto del corso di
+Laboratorio di Sistemi Operativi tenuto nell'anno accademico 2001/2002 all'Universit&agrave;
+di Bologna.<br>
+Le specifiche di tale progetto si possono trovare seguendo l'indirizzo
+<a href="http://phd.cs.unibo.it/lso/progetto.html">http://phd.cs.unibo.it/lso/progetto.html</a>,
+oppure alternativamente all'interno dell'archivio del progetto che questa
+relazione accompagna.<br>
+<hr>
+<h2>Sommario:</h2>
+<ol type="1">
+<li><a href="#desc">Descrizione generale</a>
+<li><a href="#comps">Componenti</a>
+	<ol type="a">
+	<li><a href="#proc">Processore</a>
+	<li><a href="#mem">Memoria</a>
+	<li><a href="#stor">Storage</a>
+	<li><a href="#dma">DMA</a>
+	<li><a href="#tim">Timer</a>
+	<li><a href="#sched">Scheduler</a>
+	<li><a href="#inth">Interrupt handler</a>
+	</ol>
+<li><a href="#class">Componenti "virtuali"</a>
+	<ol type="a">
+	<li><a href="#sysc">Syscall handler</a>
+	</ol>
+<li><a href="#func">Funzionamento</a>
+<li><a href="#sync">Strategie di sincronizzazione</a>
+<li><a href="#note">Altre note</a>
+</ol>
+<hr>
+<a name="desc">
+<h2>Descrizione generale</h2>
+Il sistema qui simulato &egrave; una copia del famoso gioco di programmazione CoreWars.<br>
+Il gioco originale prevede che due o pi&ugrave; programmi (detti <i>warriors</i>) scritti in
+linguaggio assembly <b>RedCode</b> si &laquo;scontrino&raquo; girando concorrentemente su un processore
+MARS, cercando di eliminarsi vicendevolmente.<br>
+Per semplicit&agrave;, si &egrave; scelto di implementare il sistema operativo e le componenti
+hardware in linguaggio <b>Java&trade;</b>, mentre i warrior in una versione semplificata
+del linguaggio assembly MIPS.<br>
+Il sistema operativo da noi implementato supporta multitasking e multithreading preemptive,
+con algoritmo di servizio di tipo round-robin a code di priorit&agrave; dinamica (con politica di aging).<br>
+Per i dettagli prettamente implementativi a livello di linguaggio, rimandiamo alla documentazione
+ottenuta con javadoc, contenuta nell'archivio.<br>
+<hr>
+<a name="comps">
+<h2>Componenti</h2>
+Ecco una descrizione per ognuno dei componenti effettivi, fisici e logici.<br>
+<hr>
+<table width="100%" border=0>
+<tr>
+<td width="10%"></td>
+<td>
+<a name="proc"><h3>Processore</h3>
+<div align="justify">
+Il processore &egrave; stato ampliato a partire dall'implementazione fornita con il 
+pacchetto originario delle interfacce per il progetto.<br>
+In particolare, si &egrave; dovuto provvedere all'introduzione di un sistema per la
+sincronizzazione con <i>timer</i> e <i>DMA</i>.<br>
+Si &egrave; scelto di non appesantire tale implementazione pi&ugrave; di tanto perch&eacute; la
+creazione di un'architettura fisica esulava dai principali scopi dell'esercitazione.<br>
+La funzione del processore &egrave; di ricevere tick dal timer, e far corrispondere ad
+ogni tick uno ed un solo "passo", che consiste nella lettura della cella di memoria
+indicata dal <i>Program Counter</i>, nell'esecuzione dell'istruzione ivi contenuta, e
+nell'aggiornamento del <i>Program Counter</i> per il prossimo passo.<br>
+</div>
+<hr>
+<a name="mem"><h3>Memoria</h3>
+<div align="justify">
+La classe MarsMemory implemtenta l'interfaccia Memory e costituisce ovviamente
+la memoria del nostro ambiente simulato.<br>
+Si &egrave; pensato di implementare
+tale componente come un array di dimensione <i>Coresize</i> (una costante specificata
+in SystemCostant, per default pari a 8192 ) oggetti <i>MarsCell</i>.<br>
+La classe ha un costruttore che non prende parametri in input e inizializza
+l'array con CoreSize celle e due metodi: writeCell e readCell che permettono
+di leggere e scrivere una cella all'indirizzo preso come parametro
+d'ingresso.<br></div>
+<hr>
+<a name="stor"><h3>Storage</h3>
+<div align="justify">I files nel nostro sistema sono implementati da MarsFile
+come array di celle. Inoltre in questa classe sono mantenuti indici e valori
+come il pid identificativo del file e del processo a cui appartiene, se
+un file &egrave; gi&agrave; aperto, il numero di files aperti, e la possibilit&agrave;
+o meno di scrittura in un dato istante.<br>
+Ciascuno di questi descrittori ha
+il proprio metodo get/set per essere testato e/o settato. Inoltre con get/setMarsFileCell
+posso scrivere o leggere a una determinata posizione nel file specificata
+come parametro in input.<br>
+<br>
+MarsStorage implementa Storage ed &egrave; la realizzazione della memoria
+di massa del nostro sistema simulato.<br>
+&Egrave; implementata attraverso la classe ArrayList(), fornita dal linguaggio java.<br>
+Oltre al costruttore la classe fornisce i metodi:<br>
+<ul>
+<li><i>getMarsStorageSize</i>, che ritorna l' attuale dimensione della memoria
+	attraverso storage.size().
+<li><i>getMarsStorageFile</i>, che ritorna l' oggetto MarsFile puntato
+dall' indice preso come parametro d' ingresso.
+<li><i>setMarsStorageFile</i>, il quale prendendo come parametri indice e un
+oggetto MarsFile lo va a scrivere quest'ultimo nella posizione indicata da
+fileIndex
+<li><i>read</i> e <i>write</i>: entrambe prendono in input pid del processo proprietario
+del file, pid del file da leggere/scrivere un offset dal quale cominciare
+a leggere/scivere size celle. Se il file non esiste o il processo che sta
+tentando di accedervi non &egrave; autorizzato ad accedervi sono generate
+eccezioni appropiate.
+</ul><br></div>
+<hr>
+<a name="dma"><h3>DMA</h3>
+<div align="justify">
+Il <i>DMA</i> &egrave; stato implementato come dispositivo in grado di ricevere richieste
+di lettura/scrittura dal <i>gestore di SystemCall</i> (una sotto-componente del
+<i>Gestore di interrupt</i>), e aggiungerle alle code di richieste gi&agrave; in attesa;
+ad ogni tick del timer, rimuove la prima richiesta e la esegue. &Egrave; importante
+notare che il servizio delle richieste &egrave; gestito in maniera FIFO, e se una richiesta
+di lettura/scrittura ha come parametro un valore maggiore del massimo valore di R/W
+in un singolo tick, l'astrazione del DMA permette di considerarla unica, mentre in realta'
+essa viene segmentata in modo tale da far rientrare ogni segmento nelle condizioni
+sopraesposte; si sottolinea infine che tale meccanismo non pregiudica la bont&agrave;
+dell'astrazione, poich&eacute; l'implementazione riconosce il segmento finale di una serie (che,
+peraltro, viene sempre accodata senza che si possano intromettere altre richieste tra
+i segmenti di una stessa richiesta), ritardando la generazione dell'interrupt fino ad
+allora, e quindi presentando al thread la richiesta soddisfatta nella sua interezza.<br>
+Il DMA rappresenta il (unico) punto di contatto tra sistema e storage per quanto
+riguarda le letture e scritture su file; come vedremo, l'apertura e la chiusura di
+file &egrave; stata implementata accedendo direttamente allo storage tramite il Syscall handler,
+senza perdere in generalit&agrave;, mantenendo la struttura semplice e pulita dell'implementazione.<br>
+</div>
+<hr>
+<a name="tim"><h3>Timer</h3>
+<div align="justify">
+Il <i>timer</i> &egrave; stato implementato come thread a se stante: si occupa di inviare periodicamente
+dei tick agli altri componenti, per sincronizzarli; inoltre gestisce la generazione periodica
+di interrupt 1 (time slice expired) per gestire la concorrenza tra i processi.<br>
+La generazione di tick pu&ograve; essere sospesa per gestire le richieste di interrupt ed
+evitare che le varie componenti entrino in conflitto; inoltre &egrave; sempre il timer che si occupa
+di effettuare lo shutdown dei vari componenti, chiamando la funzione die().
+<br></div>
+<hr>
+<a name="sched"><h3>Scheduler</h3>
+<div align="justify">
+Lo <i>scheduler</i> &egrave; il cuore del sistema operativo.<br>
+Ha il compito di determinare il prossimo thread o processo da eseguire, di aggiungere nuovi
+thread in seguito a chiamate di sistema, di gestire la preemption dei thread, il loro swap
+in e swap out.<br>
+Inoltre ha anche il compito di determinare i casi di vittoria (e, in questo caso, il
+vincitore) oppure di pareggio.
+<br></div>
+<hr>
+<a name="inth"><h3>Interrupt handler</h3>
+<div align="justify">
+Il <i>gestore di interrupt</i> ha il compito di chiamare le varie routine in base al tipo
+di interrupt generato; quasi in tutti i casi si occupa di disattivare la generazione
+di tick da parte del <i>timer</i> (per evitare casi di accesso concorrente alla stessa
+risorsa, e di conseguenza la generazione di stati inconsistenti), e di gestire gli interrupt
+che possono essere:
+<ol start="0">
+<li><b>SYSCALL</b> - le syscalls possono essere:
+	<ol start="0">
+	<li><b>STARTTHREAD (address,priority)</b> - viene creato un nuovo thread con PC <i>address</i>
+		e priorit&agrave; <i>priority</i>, se il processo ha spazio; se il thread appena creato ha
+		priorit&agrave; maggiore di quello corrente, quello corrente viene fermato e viene schedulato
+		quello nuovo;
+	<li><b>YIELD</b> - il thread rilascia il processore a qualsiasi altro thread dello stesso processo
+		che abbia almeno il suo livello di priorit&agrave;, se esiste; altrimenti continua;
+	<li><b>STOP</b> - il thread muore;
+	<li><b>fd=OPEN (fileIndex,mode)</b> - viene chiamato il <i>Syscall Handler</i>;
+	<li><b>READ (fd,address,size)</b> - viene chiamato il <i>Syscall Handler</i>;
+	<li><b>WRITE (fd,address,size)</b> - viene chiamato il <i>Syscall Handler</i>;
+	<li><b>CLOSE (fd)</b> - viene chiamato il <i>Syscall Handler</i>;
+	<li><b>SYSCONF (paramId)</b> - legge la variabile di runtime specificata con paramId, e ne ritorna
+		il valore;
+	</ol>
+<li><b>TIMEOUT</b> - il time slice destinato al processo &egrave; terminato: viene chiamato lo <i>scheduler</i>
+	che controlla se esiste un vincitore oppure effettua un context switch;
+<li><b>INVALID OPCODE</b> - chiamato dalla <i>CPU</i> se un'istruzione ha un opcode o uno degli operandi
+	non validi; causa la morte del thread corrente;
+<li><b>DMA TRAP</b> - risveglia il thread in stato <i>not running</i> che aveva chiesto l'operazione
+	di I/O appena terminata; se il thread &egrave; nel processo corrente ed ha priorit&agrave; maggiore del thread
+	corrente, quest'ultimo viene fermato e viene schedulato quello risvegliato.
+</ol>
+Gli interrupt sono sincronizzati tramite un monitor (implementato da <b>Java&trade;</b> grazie alla
+primitiva <i>synchronized</i>.<br>
+&Egrave; interessante notare che, poco realisticamente, nelle syscalls bloccanti (<i>read</i> e <i>write</i>),
+il processore viene "spento" inibendo il timer dal notificargli tick; questa soluzione &egrave; stata scelta
+per la sua semplicit&agrave; di implementazione, perch&eacute; potrebbe succedere che ad un certo punto tutti i thread
+tranne uno siano in attesa di interrupt 3, e quest'ultimo chiami una syscall bloccante: quest'ultimo
+diventer&agrave; not running, e lo scheduler attender&agrave; in eterno che un processo si liberi, ma questo
+non avverr&agrave; mai perch&eacute; il timer era stato "spento". Disattivando solo la CPU, riusciamo ad evitare
+simili casi di lock, poich&eacute; il DMA continua ad avere le notifiche del timer, e quindi prima o poi
+un thread torner&agrave; in stato running, permettendo al processore di ricominciare il calcolo.
+<br></div>
+<hr>
+</td>
+</table>
+<hr>
+<a name="class">
+<h2>Componenti "virtuali"</h2>
+Questi componenti sono "virtuali" in quanto sotto-componenti di altri componenti logici gi&agrave; visti sopra,
+e quindi non autosufficenti; si &egrave; preferito tuttavia differenziarli per la loro complessit&agrave;
+o le scelte implementative.<br>
+<hr>
+<table width="100%" border=0>
+<tr>
+<td width="10%"></td>
+<td>
+<a name="sysc"><h3>Syscall handler</h3>
+<div align="justify">
+Il <i>gestore di syscalls</i> mantiene anche la filetable per ogni processo.<br>
+Si &egrave; scelto di rendere disponibile una sorta di algoritmo lettori/scrittori:
+ogni file pu&ograve; essere aperto in lettura da un numero indefinito di threads, ma solo
+un thread lo pu&ograve; aprire in scrittura, e le due condizioni (lettura/scrittura)
+sono mutualmente esclusive.<br>
+In apertura, viene fatto un controllo sul proprietario del file, sull'esistenza di
+quest'ultimo e sul numero di files <i>diversi</i> aperti per processo.<br>
+Se il file richiesto non &egrave; aperto, viene aperto (a condizione che ci sia un fd
+disponibile per quel processo).<br>
+Se il file richiesto &egrave; gi&agrave; stato aperto, si controlla la modalit&agrave; richiesta
+e la modalit&agrave; di apertura: se una delle due &egrave; <u>write</u> la chiamata fallisce,
+altrimenti, viene cercato il file descriptor relativo a quel file e viene restituito.<br>
+Sottolineiamo che il puntatore di seek del file &egrave; condiviso tra tutti i lettori.<br>
+Le chiamate a read e a write sono speculari, controllano i permessi del thread chiamante
+rispetto al file, quindi accodano la richiesta al DMA e fermano il thread.<br>
+La chiamata a close chiude il fd associato al file; se il thread chiamante era scrittore
+oppure era l'ultimo lettore rimasto, il fd viene liberato, altrimenti, nel caso ci siano
+ancora lettori, il Thread ID del chiamante viene semplicemente eliminato dalla lista dei
+lettori aventi permesso.<br>
+</div>
+<hr>
+</td>
+<tr>
+</table>
+<hr>
+<a name="func">
+<h2>Funzionamento</h2>
+In fase di caricamento vengono inizializzati tutti i componenti; i warriors vengono, per coerenza,
+caricati simmetricamente nello storage e nella memoria (in un sistema reale sarebbero trasferiti
+in memoria tramite delle chiamate di caricamento al DMA, ma questo esulava dagli scopi principali 
+di questa esercitazione).<br>
+Il processore viene "resettato", cos&igrave; come vengono ripulite le code del DMA; vengono creati
+i processi ed inizialmente per ogni processo viene creato un thread con priorit&agrave; 2.<br>
+Viene inizializzato l'interrupt handler.<br>
+A questo punto vengono fatti partire i thread di CPU, DMA e, infine, per ultimo, il thread
+del timer che fa partire effettivamente l'intero sistema.<br>
+Quindi, periodicamente, ogni componente riceve un tick dal timer: il DMA fa un'operazione di I/O
+oppure non fa nulla se le code son vuote, la CPU esegue un'istruzione permettendo al warrior
+di vivere; ad ogni fine di time slice viene generato un'interrupt (1) che richiama lo scheduler
+permettendo di eseguire il controllo del vincitore e un context switch se la battaglia continua.
+Quindi il ciclo si ripete.<br>
+La battaglia finisce:
+<ul>
+<li>con un vincitore (tutti gli altri processi sono in stato dead);
+<li>con un pareggio (il numero massimo di context switches prima del dichiarato pareggio &egrave; stato raggiunto);
+</ul>
+<br>
+<hr>
+<a name="sync">
+<h2>Strategie di sincronizzazione</h2>
+La maggior parte dei problemi di sincronizzazione sono stati risolti grazie alla primitiva
+<i>synchronized</i> offerta da <b>Java&trade;</b>; i maggiori degni di nota sono:
+<ul>
+<li>accesso alla <u>memoria</u>: ottenuto semplicemente rendendo <i>synchronize</i>d i
+	metodi write/read;
+<li>accesso allo <u>storage</u>: non &egrave; necessario, poich&eacute; lo storage &egrave; sempre
+	acceduto dal DMA (che ha una sua sincronizzazione interna) oppure dal syscall handler nei casi di
+	chiamate a open e a close; in questi due casi il timer viene "congelato", quindi il DMA non pu&ograve;
+	effettuare operazioni;
+<li><u>interrupt handler</u>: diversi sotto-metodi relativi all'interrupt handler condividono le stesse
+	risorse (in particolar modo lo scheduler); per evitare casi di deadlock e di accesso concorrente
+	allo scheduler, si &egrave; deciso di rendere il metodo interrupt() <i>synchronized</i>.
+<li><u>timer</u>: la gestione tramite tick() e tickCompleted() si &egrave; rivelata sufficiente;
+</ul>
+<br>
+<hr>
+<a name="note">
+<h2>Altre note</h2>
+Altri spunti degni di nota (secondo noi) sono:
+<ul>
+<li><u>numero di processi</u>: fin dall'inizio l'esercitazione &egrave; stata pensata per permettere la battaglia
+	tra un numero variabile tra 2 e n processi; semplicemente la limitazione a due soli processi
+	rendeva la battaglia monotona e l'esercitazione troppo limitata.
+<li><u>politica di aging</u>: abbiamo scelto di implementare nello schedule una politica di aging onde prevenire
+	casi di starvation di thread con priorit&agrave; bassa; per privilegiare le applicazioni I/O bound, abbiamo scelto
+	di diminiuire di un livello la priorit&agrave; del thread corrente al momento del timeout, mentre viene aumentata
+	di uno quella di un thread che passi dallo stato running a quello not running, e di uno quello che faccia
+	il contrario, ottenendo cos&igrave; l'aumento di due livelli, in definitiva, per i thread che chiedono un'operazione
+	di I/O. La priorit&agrave; di un thread viene anche decrementata di uno ogni volta che questo chiama la system call
+	YIELD e mantiene lo schedule (i.e.: non esiste alcun thread che lo sostituisca).
+</ul>
+<br>
+<hr>
+<table border=0 width="100%">
+<tr>
+<td align=left><font size=2><i>Last updated: September 25, 2002<br></i></font></td>
+<td align=right><font size=2><i>
+<a href="mailto:gonano@CS.UniBO.It">gonano@CS.UniBO.It</a><br>
+<a href="mailto:saporet3@CS.UniBO.It">saporet3@CS.UniBO.It</a><br>
+<a href="mailto:mseno@CS.UniBO.It">mseno@CS.UniBO.It</a><br>
+</i></font></td>
+</tr></table>
+</BODY>
+</HTML>
